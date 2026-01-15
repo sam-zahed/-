@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>مساعدك الذكي - Smart Assistant</title>
+
+    <!-- Accessibility Meta -->
+    <meta name="description" content="مساعد ذكي للمكفوفين - يتكلم معك ويفهم أوامرك">
+
+    <style>
+        :root {
+            --primary: #6366f1;
+            --danger: #ef4444;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --dark: #1e1b4b;
+            --light: #f8fafc;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            background: linear-gradient(180deg, var(--dark) 0%, #312e81 100%);
+            color: var(--light);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            touch-action: manipulation;
+            overflow: hidden;
+        }
+
+        /* === الزر الرئيسي - الشاشة كلها === */
+        #main-button {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        #main-button:active {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        #main-button.listening {
+            background: linear-gradient(180deg, #dc2626 0%, #991b1b 100%);
+            animation: pulse-bg 1.5s infinite;
+        }
+
+        @keyframes pulse-bg {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.8;
+            }
+        }
+
+        /* === أيقونة الميكروفون === */
+        #mic-icon {
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            background: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 80px;
+            box-shadow: 0 10px 50px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+            margin-bottom: 30px;
+        }
+
+        #main-button.listening #mic-icon {
+            animation: pulse 1s infinite;
+            background: var(--danger);
+            color: white;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.1);
+            }
+        }
+
+        /* === النصوص === */
+        #status-text {
+            font-size: 2rem;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 15px;
+            max-width: 90%;
+            line-height: 1.4;
+        }
+
+        #instruction-text {
+            font-size: 1.2rem;
+            opacity: 0.8;
+            text-align: center;
+            max-width: 80%;
+        }
+
+        /* === شريط الأوامر السريعة === */
+        #quick-commands {
+            display: flex;
+            gap: 10px;
+            padding: 15px;
+            overflow-x: auto;
+            background: rgba(0, 0, 0, 0.3);
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .quick-btn {
+            flex-shrink: 0;
+            padding: 15px 25px;
+            border: none;
+            border-radius: 50px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .quick-btn:active {
+            transform: scale(0.95);
+        }
+
+        .quick-btn.primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .quick-btn.warning {
+            background: var(--warning);
+            color: black;
+        }
+
+        .quick-btn.success {
+            background: var(--success);
+            color: white;
+        }
+
+        .quick-btn.danger {
+            background: var(--danger);
+            color: white;
+        }
+
+        /* === نتائج الكشف === */
+        #results-panel {
+            position: fixed;
+            bottom: 80px;
+            left: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.85);
+            border-radius: 15px;
+            padding: 15px;
+            max-height: 40vh;
+            overflow-y: auto;
+            display: none;
+            backdrop-filter: blur(10px);
+        }
+
+        #results-panel.show {
+            display: block;
+        }
+
+        .result-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 15px;
+            margin: 8px 0;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            font-size: 1.1rem;
+        }
+
+        .result-item.danger {
+            background: var(--danger);
+            animation: blink 0.5s 3;
+        }
+
+        @keyframes blink {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        /* === وضع الصمت === */
+        #quiet-indicator {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            background: var(--warning);
+            color: black;
+            padding: 10px 20px;
+            border-radius: 10px;
+            text-align: center;
+            font-weight: bold;
+            display: none;
+        }
+
+        #quiet-indicator.show {
+            display: block;
+        }
+
+        /* === عناصر مخفية === */
+        video,
+        canvas {
+            display: none;
+        }
+
+        /* === شاشة اللغة === */
+        #lang-screen {
+            position: fixed;
+            inset: 0;
+            background: var(--dark);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        #lang-screen h1 {
+            font-size: 1.8rem;
+            margin-bottom: 40px;
+            text-align: center;
+            padding: 0 20px;
+        }
+
+        .lang-option {
+            width: 80%;
+            max-width: 300px;
+            padding: 20px;
+            margin: 10px;
+            font-size: 1.4rem;
+            border: none;
+            border-radius: 15px;
+            background: white;
+            color: var(--dark);
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .lang-option:active {
+            transform: scale(0.98);
+        }
+
+        /* === وضعية الإكسسبلتي === */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            border: 0;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- شاشة اختيار اللغة -->
+    <div id="lang-screen" role="dialog" aria-label="اختر اللغة">
+        <h1>اختر اللغة<br>Select Language<br>Vælg Sprog</h1>
+        <button class="lang-option" onclick="selectLang('ar')">🇸🇦 العربية</button>
+        <button class="lang-option" onclick="selectLang('en')">🇬🇧 English</button>
+        <button class="lang-option" onclick="selectLang('da')">🇩🇰 Dansk</button>
+    </div>
+
+    <!-- مؤشر وضع الصمت -->
+    <div id="quiet-indicator" role="status" aria-live="polite">
+        🔇 وضع الصمت - فقط الأخطار
+    </div>
+
+    <!-- الزر الرئيسي -->
+    <div id="main-button" role="button" tabindex="0" aria-label="اضغط للتحدث مع المساعد" onclick="handleMainTap()">
+
+        <div id="mic-icon" aria-hidden="true">🎤</div>
+        <div id="status-text">اضغط هنا للتحدث</div>
+        <div id="instruction-text">سأساعدك في معرفة ما حولك</div>
+    </div>
+
+    <!-- لوحة النتائج -->
+    <div id="results-panel" role="region" aria-label="نتائج الكشف" aria-live="polite"></div>
+
+    <!-- أزرار سريعة -->
+    <div id="quick-commands" role="toolbar" aria-label="أوامر سريعة">
+        <button class="quick-btn primary" onclick="quickCommand('describe')" aria-label="وصف المشهد">
+            👁️ ماذا أمامي
+        </button>
+        <button class="quick-btn success" onclick="quickCommand('read')" aria-label="قراءة النص">
+            📖 اقرأ
+        </button>
+        <button class="quick-btn warning" onclick="quickCommand('quiet')" aria-label="وضع الصمت">
+            🔇 اسكت
+        </button>
+        <button class="quick-btn danger" onclick="quickCommand('scan')" aria-label="مسح كامل">
+            🔄 مسح كامل
+        </button>
+    </div>
+
+    <!-- عناصر مخفية -->
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvas"></canvas>
+
+    <script>
+        // === المتغيرات الأساسية ===
+        let lang = 'ar';
+        let isListening = false;
+        let isQuietMode = false;
+        let isRunning = false;
+        let stream = null;
+        let analyzeInterval = null;
+        let mediaRecorder = null;
+        let audioChunks = [];
+
+        const synth = window.speechSynthesis;
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        // === ترجمات ===
+        const texts = {
+            ar: {
+                tapToSpeak: 'اضغط هنا للتحدث',
+                listening: 'أتحدث معك...',
+                analyzing: 'جاري التحليل...',
+                quietOn: 'وضع الصمت نشط',
+                quietOff: 'التنبيهات مفعلة',
+                noCamera: 'لا يمكن الوصول للكاميرا',
+                welcome: 'مرحباً، أنا مساعدك الذكي. اضغط على الشاشة وتحدث معي',
+                help: 'سأساعدك في معرفة ما حولك',
+                nothing: 'لا أرى شيئاً واضحاً',
+                describe: 'ماذا أمامي',
+                read: 'اقرأ',
+                quiet: 'اسكت',
+                scan: 'مسح كامل'
+            },
+            en: {
+                tapToSpeak: 'Tap here to speak',
+                listening: 'Listening...',
+                analyzing: 'Analyzing...',
+                quietOn: 'Quiet mode on',
+                quietOff: 'Alerts enabled',
+                noCamera: 'Cannot access camera',
+                welcome: 'Hello, I am your smart assistant. Tap the screen and talk to me',
+                help: 'I will help you know what is around you',
+                nothing: 'I do not see anything clear',
+                describe: 'What is in front',
+                read: 'Read text',
+                quiet: 'Quiet',
+                scan: 'Full scan'
+            },
+            da: {
+                tapToSpeak: 'Tryk her for at tale',
+                listening: 'Lytter...',
+                analyzing: 'Analyserer...',
+                quietOn: 'Stilletilstand aktiv',
+                quietOff: 'Advarsler aktiveret',
+                noCamera: 'Kan ikke få adgang til kamera',
+                welcome: 'Hej, jeg er din smarte assistent. Tryk på skærmen og tal til mig',
+                help: 'Jeg hjælper dig med at vide hvad der er omkring dig',
+                nothing: 'Jeg kan ikke se noget klart',
+                describe: 'Hvad er foran mig',
+                read: 'Læs tekst',
+                quiet: 'Stille',
+                scan: 'Fuld scanning'
+            }
+        };
+
+        function t(key) {
+            return texts[lang][key] || texts['ar'][key];
+        }
+
+        // === اختيار اللغة ===
+        function selectLang(selectedLang) {
+            lang = selectedLang;
+            document.getElementById('lang-screen').style.display = 'none';
+            document.body.dir = lang === 'ar' ? 'rtl' : 'ltr';
+
+            // تحديث النصوص
+            document.getElementById('status-text').textContent = t('tapToSpeak');
+            document.getElementById('instruction-text').textContent = t('help');
+
+            // تحديث الأزرار
+            const btns = document.querySelectorAll('.quick-btn');
+            btns[0].innerHTML = '👁️ ' + t('describe');
+            btns[1].innerHTML = '📖 ' + t('read');
+            btns[2].innerHTML = '🔇 ' + t('quiet');
+            btns[3].innerHTML = '🔄 ' + t('scan');
+
+            // تشغيل الكاميرا
+            startCamera().then(() => {
+                speak(t('welcome'));
+                // بدء التحليل التلقائي
+                startAutoAnalysis();
+            });
+        }
+
+        // === الكاميرا ===
+        async function startCamera() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'environment', width: 640, height: 480 }
+                });
+                video.srcObject = stream;
+                canvas.width = 640;
+                canvas.height = 480;
+                return true;
+            } catch (e) {
+                speak(t('noCamera'));
+                return false;
+            }
+        }
+
+        function captureFrame() {
+            if (!video.srcObject || video.readyState < 2) {
+                return null;
+            }
+            try {
+                ctx.drawImage(video, 0, 0, 640, 480);
+                return canvas.toDataURL('image/jpeg', 0.7);
+            } catch (e) {
+                console.error("Capture frame error:", e);
+                return null;
+            }
+        }
+
+        // === النطق ===
+        function speak(text, force = false) {
+            if (!text) return;
+            if (isQuietMode && !force) return;
+
+            synth.cancel();
+            const utterance = new SpeechSynthesisUtterance(text);
+
+            const voices = synth.getVoices();
+            let voice = voices.find(v => v.lang.includes(lang));
+            if (voice) utterance.voice = voice;
+
+            utterance.rate = 0.9;
+            synth.speak(utterance);
+        }
+
+        // === الضغط الرئيسي ===
+        async function handleMainTap() {
+            if (isListening) {
+                stopListening();
+            } else {
+                startListening();
+            }
+        }
+
+        // === بدء الاستماع ===
+        async function startListening() {
+            const mainBtn = document.getElementById('main-button');
+            const statusText = document.getElementById('status-text');
+            const micIcon = document.getElementById('mic-icon');
+
+            try {
+                const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(audioStream);
+                audioChunks = [];
+
+                mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+                mediaRecorder.onstop = processVoiceCommand;
+
+                mediaRecorder.start();
+                isListening = true;
+
+                mainBtn.classList.add('listening');
+                statusText.textContent = t('listening');
+                micIcon.textContent = '🔴';
+
+                // إيقاف تلقائي بعد 5 ثواني
+                setTimeout(() => {
+                    if (isListening) stopListening();
+                }, 5000);
+
+            } catch (e) {
+                speak('الميكروفون غير متاح');
+            }
+        }
+
+        // === إيقاف الاستماع ===
+        function stopListening() {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+
+            isListening = false;
+
+            const mainBtn = document.getElementById('main-button');
+            const statusText = document.getElementById('status-text');
+            const micIcon = document.getElementById('mic-icon');
+
+            mainBtn.classList.remove('listening');
+            statusText.textContent = t('analyzing');
+            micIcon.textContent = '🎤';
+        }
+
+        // === معالجة الأمر الصوتي ===
+        async function processVoiceCommand() {
+            if (audioChunks.length === 0) return;
+
+            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+            const imageBase64 = captureFrame();
+
+            const formData = new FormData();
+            formData.append('audio', audioBlob, 'voice.wav');
+            formData.append('image', imageBase64);
+
+            try {
+                const res = await fetch('/assistant/chat', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                // الصوت مباشرة
+                if (res.headers.get('content-type')?.includes('audio')) {
+                    const audioData = await res.blob();
+                    const audio = new Audio(URL.createObjectURL(audioData));
+                    audio.play();
+
+                    // الحصول على النص من الهيدر
+                    const responseText = res.headers.get('X-Response-Text') || '';
+                    document.getElementById('status-text').textContent =
+                        decodeURIComponent(responseText) || t('tapToSpeak');
+                } else {
+                    const data = await res.json();
+                    document.getElementById('status-text').textContent = data.text || t('tapToSpeak');
+                    speak(data.text);
+                }
+
+            } catch (e) {
+                console.error('Error:', e);
+                speak('خطأ: ' + e.message);
+                document.getElementById('status-text').textContent = 'خطأ: ' + e.message;
+            }
+        }
+
+        // === أوامر سريعة ===
+        async function quickCommand(cmd) {
+            const imageBase64 = captureFrame();
+
+            if (cmd === 'quiet') {
+                isQuietMode = !isQuietMode;
+                document.getElementById('quiet-indicator').classList.toggle('show', isQuietMode);
+                speak(isQuietMode ? t('quietOn') : t('quietOff'), true);
+
+                // إرسال للخادم
+                fetch('/assistant/mode', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mode: isQuietMode ? 'quiet' : 'normal' })
+                });
+                return;
+            }
+
+            document.getElementById('status-text').textContent = t('analyzing');
+
+            let cmdText = '';
+            switch (cmd) {
+                case 'describe': cmdText = 'ماذا أمامي؟'; break;
+                case 'read': cmdText = 'اقرأ'; break;
+                case 'scan': cmdText = 'دور حولي'; break;
+            }
+
+            try {
+                const res = await fetch('/assistant/command', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: cmdText, image_b64: imageBase64 })
+                });
+
+                const data = await res.json();
+                document.getElementById('status-text').textContent = data.text || t('nothing');
+                speak(data.text);
+
+            } catch (e) {
+                console.error(e);
+                speak('خطأ: ' + e.message);
+                document.getElementById('status-text').textContent = 'خطأ: ' + e.message;
+            }
+        }
+
+        // === التحليل التلقائي ===
+        function startAutoAnalysis() {
+            if (analyzeInterval) clearInterval(analyzeInterval);
+
+            analyzeInterval = setInterval(async () => {
+                if (isListening) return; // لا تحلل أثناء الاستماع
+
+                try {
+                    const imageBase64 = captureFrame();
+
+                    const res = await fetch('/assistant/analyze', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ image_b64: imageBase64 })
+                    });
+
+                    const data = await res.json();
+
+                    // عرض التنبيهات المهمة فقط
+                    if (data.should_speak && data.speak_message) {
+                        document.getElementById('status-text').textContent = data.speak_message;
+                        speak(data.speak_message);
+
+                        // اهتزاز للخطر
+                        if (data.alerts?.some(a => a.alert_priority <= 2)) {
+                            navigator.vibrate?.([300, 100, 300]);
+                        }
+                    }
+
+                    // تحديث لوحة النتائج
+                    updateResultsPanel(data.alerts || []);
+
+                } catch (e) {
+                    console.error('Analysis error:', e);
+                }
+
+            }, 4000); // كل 4 ثواني
+        }
+
+        // === تحديث لوحة النتائج ===
+        function updateResultsPanel(alerts) {
+            const panel = document.getElementById('results-panel');
+
+            if (alerts.length === 0) {
+                panel.classList.remove('show');
+                return;
+            }
+
+            panel.classList.add('show');
+            panel.innerHTML = alerts.slice(0, 5).map(alert => `
+                <div class="result-item ${alert.alert_priority <= 2 ? 'danger' : ''}">
+                    <span>${alert.class_ar || alert.class}</span>
+                    <span>${alert.distance_m?.toFixed(1) || '?'} م</span>
+                </div>
+            `).join('');
+        }
+
+        // === تحميل الأصوات ===
+        speechSynthesis.onvoiceschanged = () => { };
+
+        // === اختصارات لوحة المفاتيح (للإكسسبلتي) ===
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                handleMainTap();
+            } else if (e.key === 'q') {
+                quickCommand('quiet');
+            } else if (e.key === 'd') {
+                quickCommand('describe');
+            }
+        });
+    </script>
+</body>
+
+</html>

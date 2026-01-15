@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Smart Vision Assistant</title>
+    <style>
+        body {
+            background-color: #000;
+            color: #fff;
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+            touch-action: manipulation;
+        }
+
+        #status {
+            font-size: 2rem;
+            text-align: center;
+            margin-bottom: 20px;
+            padding: 20px;
+        }
+
+        #main-btn {
+            width: 100vw;
+            height: 100vh;
+            background: transparent;
+            border: none;
+            color: white;
+            font-size: 2rem;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+        }
+
+        .active {
+            background-color: #333 !important;
+        }
+
+        video {
+            display: none;
+            /* Hidden, we capture frames internally */
+        }
+
+        #debug {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            font-size: 0.8rem;
+            color: #666;
+            max-width: 90%;
+            word-wrap: break-word;
+        }
+    </style>
+</head>
+
+<body>
+
+    <video id="video" autoplay playsinline></video>
+
+    <button id="main-btn">
+        <div id="status">Tap Screen to Start</div>
+        <div style="font-size: 1rem; opacity: 0.7;">(Double tap to Stop)</div>
+    </button>
+
+    <button id="mic-btn"
+        style="position: absolute; bottom: 80px; right: 30px; width: 80px; height: 80px; border-radius: 50%; background: #007bff; color: white; font-size: 2rem; border: none; z-index: 100; display: none; box-shadow: 0 0 20px rgba(0,0,0,0.5);">🎤</button>
+
+    <div id="debug"></div>
+
+    <script>
+        const video = document.getElementById('video');
+        const mainBtn = document.getElementById('main-btn');
+        const micBtn = document.getElementById('mic-btn');
+        const statusDiv = document.getElementById('status');
+        const debugDiv = document.getElementById('debug');
+
+        // ... existing config ...
+        const API_URL = '/proxy/ingest';
+        const LEARN_URL = '/device/interactive/learn'; // Route in main.py
+        const INTERVAL_MS = 1000;
+
+        let isRunning = false;
+        let intervalId = null;
+        let userId = 'user_' + Math.floor(Math.random() * 10000);
+        let lastMessage = '';
+        let lastSpeakTime = 0;
+        let mediaRecorder;
+        let audioChunks = [];
+
+        // ... existing functions ...
+        const synth = window.speechSynthesis;
+
+        function log(msg) {
+            console.log(msg);
+            debugDiv.innerText = msg;
+        }
+
+        // Mic Logic
+        micBtn.addEventListener('mousedown', startRecording);
+        micBtn.addEventListener('touchstart', (e) => { e.preventDefault(); startRecording(); });
+        micBtn.addEventListener('mouseup', stopRecording);
+        micBtn.addEventListener('touchend', (e) => { e.preventDefault(); stopRecording(); });
+
+        async function startRecording() {
+            micBtn.style.backgroundColor = 'red';
+            micBtn.style.transform = 'scale(1.2)';
+            audioChunks = [];
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                mediaRecorder.ondataavailable = event => {
+                    audioChunks.push(event.data);
+                };
+                mediaRecorder.start();
+            } catch (e) {
+                log("Mic Error: " + e.message);
+                speak("تعذر الوصول للميكروفون");
+            }
+        }
+
+        async function stopRecording() {
+            micBtn.style.backgroundColor = '#007bff';
+            micBtn.style.transform = 'scale(1)';
+
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+                mediaRecorder.stream.getTracks().forEach(t => t.stop());
+
+                mediaRecorder.onstop = sendAudio;
+            }
+        }
+
+        async function sendAudio() {
+            if (audioChunks.length === 0) return;
+
+            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+            const imageBase64 = captureFrame();
+
+            statusDiv.innerText = "Learning...";
+            speak("جاري التعلم...");
+
+            const formData = new FormData();
+            formData.append('audio', audioBlob, 'voice.wav');
+            formData.append('image', imageBase64);
+
+            try {
+                const res = await fetch(LEARN_URL, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+
+                if (data.status === 'success') {
+                    const msg = "تم حفظ " + (data.name || "الوجه");
+                    speak(msg);
+                    statusDiv.innerText = msg;
+                } else {
+                    speak("عذراً، لم أفهم");
+                    statusDiv.innerText = "Error: " + data.message;
+                }
+            } catch (e) {
+                log("Learn Error: " + e.message);
+                speak("حدث خطأ في الاتصال");
+            }
+        }
+
+
+        // Synth for TTS
+        const synth = window.speechSynthesis;
+
+        function log(msg) {
+            console.log(msg);
+            debugDiv.innerText = msg;
+        }
+
+        function speak(text, urgency = 'normal') {
+            if (!text) return;
+
+            // Don't repeat same message within 3 seconds
+            const now = Date.now();
+            if (text === lastMessage && (now - lastSpeakTime) < 3000) {
+                return; // Skip - same message recently spoken
+            }
+
+            // Cancel current speech for any new message
+            synth.cancel();
+
+            lastMessage = text;
+            lastSpeakTime = now;
+
+            const utterance = new SpeechSynthesisUtterance(text);
+
+            // Try to find Arabic voice
+            const voices = synth.getVoices();
+            const arVoice = voices.find(v => v.lang.includes('ar'));
+            if (arVoice) utterance.voice = arVoice;
+
+            // FAST speech - blind users need quick info
+            if (urgency === 'critical') {
+                utterance.rate = 1.5; // Very fast for critical
+                utterance.pitch = 1.3;
+                utterance.volume = 1.0;
+            } else if (urgency === 'high') {
+                utterance.rate = 1.4;
+                utterance.pitch = 1.2;
+                utterance.volume = 1.0;
+            } else {
+                utterance.rate = 1.2; // Still fast for normal
+                utterance.pitch = 1.0;
+                utterance.volume = 0.9;
+            }
+
+            synth.speak(utterance);
+        }
+
+        async function startCamera() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                const msg = "خطأ: المتصفح يمنع الكاميرا لأن الرابط غير آمن (HTTP). يرجى استخدام HTTPS أو localhost (راجع التوثيق لاستخدام ngrok).";
+                log(msg);
+                statusDiv.innerText = "Error: Use HTTPS / Ngrok";
+                speak("المتصفح يمنع الكاميرا، يجب استخدام رابط آمن");
+                return false;
+            }
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'environment' }
+                });
+                video.srcObject = stream;
+                return true;
+            } catch (err) {
+                log("Camera Error: " + err.message);
+                speak("عذراً، لا يمكن الوصول للكاميرا");
+                return false;
+            }
+        }
+
+        function captureFrame() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 300; // Resize for speed
+            canvas.height = 300 * (video.videoHeight / video.videoWidth);
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            return canvas.toDataURL('image/jpeg', 0.6); // Quality 0.6
+        }
+
+        async function processFrame() {
+            if (!isRunning) return;
+
+            try {
+                const imageBase64 = captureFrame();
+                const now = new Date().toISOString();
+
+                // Beep to indicate capture (optional)
+                // new Audio('click.mp3').play().catch(()=>{});
+
+                // Payload matching Ingest-Realtime-Decision.json expectations via Proxy
+                // The n8n webhook expects: { user_id, timestamp, small_image_base64, ... }
+                const payload = {
+                    user_id: userId,
+                    timestamp: now,
+                    small_image_base64: imageBase64,
+                    device_id: 'web_client',
+                    depth_summary: { near_objects: [] }, // Mock
+                    device_pose: {}
+                };
+
+                statusDiv.innerText = "Analyzing...";
+
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'error') {
+                    log("n8n Error: " + (data.n8n_response || 'Unknown'));
+                    statusDiv.innerText = "Error: Check Server Logs";
+                    return;
+                }
+
+                // Handle Response - the workflow returns: { status, message, urgency, is_danger, objects }
+                let textToSpeak = data.message || "";
+                const urgency = data.urgency || 'info';
+                const isDanger = data.is_danger || false;
+                const objCount = data.object_count || 0;
+
+                // Haptic feedback based on urgency
+                if (navigator.vibrate) {
+                    if (urgency === 'critical') {
+                        navigator.vibrate([300, 100, 300, 100, 300]); // Strong repeated vibration
+                    } else if (urgency === 'high') {
+                        navigator.vibrate([200, 100, 200]); // Medium vibration
+                    } else if (urgency === 'medium') {
+                        navigator.vibrate([100]); // Single short vibration
+                    }
+                }
+
+                // Visual feedback based on urgency
+                if (urgency === 'critical') {
+                    statusDiv.style.backgroundColor = '#ff0000';
+                    statusDiv.style.color = 'white';
+                    statusDiv.style.fontSize = '2.5rem';
+                } else if (urgency === 'high') {
+                    statusDiv.style.backgroundColor = '#ff6600';
+                    statusDiv.style.color = 'white';
+                    statusDiv.style.fontSize = '2rem';
+                } else if (urgency === 'medium') {
+                    statusDiv.style.backgroundColor = '#ffcc00';
+                    statusDiv.style.color = 'black';
+                    statusDiv.style.fontSize = '2rem';
+                } else if (objCount > 0) {
+                    statusDiv.style.backgroundColor = '#333';
+                    statusDiv.style.color = '#00ff00';
+                    statusDiv.style.fontSize = '2rem';
+                } else {
+                    statusDiv.style.backgroundColor = '#004400';
+                    statusDiv.style.color = '#00ff00';
+                    statusDiv.style.fontSize = '2rem';
+                }
+
+                if (textToSpeak) {
+                    statusDiv.innerText = textToSpeak;
+                    speak(textToSpeak, urgency);
+                } else {
+                    statusDiv.innerText = objCount > 0 ? `تم اكتشاف ${objCount} أشياء` : "جاري التحليل...";
+                }
+
+            } catch (err) {
+                log("Network Error: " + err.message);
+            }
+        }
+
+        async function toggleApp() {
+            if (isRunning) {
+                // Stop
+                isRunning = false;
+                if (intervalId) clearInterval(intervalId);
+                if (video.srcObject) {
+                    video.srcObject.getTracks().forEach(track => track.stop());
+                }
+                statusDiv.innerText = "Stopped. Tap to Start.";
+                mainBtn.classList.remove('active');
+                micBtn.style.display = 'none'; // Hide Mic
+                speak("تم الإيقاف");
+            } else {
+                // Start
+                statusDiv.innerText = "Starting Camera...";
+                const success = await startCamera();
+                if (success) {
+                    // Initialize TTS context immediately on user gesture
+                    if (synth.paused) synth.resume();
+                    synth.speak(new SpeechSynthesisUtterance('')); // Silent speak to unlock audio
+
+                    isRunning = true;
+                    mainBtn.classList.add('active');
+                    micBtn.style.display = 'block'; // Show Mic
+                    statusDiv.innerText = "Active. Analyzing...";
+                    speak("تم التشغيل، جاري التحليل");
+
+                    // Initial capture
+                    processFrame();
+                    intervalId = setInterval(processFrame, INTERVAL_MS);
+                }
+            }
+        }
+
+        // Handle Interactions
+        mainBtn.addEventListener('click', () => {
+            // Simple debounce or logic to differentiate tap vs double tap if needed
+            // For simplicity, just toggle
+            toggleApp();
+        });
+
+        // Initialize TTS voices
+        window.speechSynthesis.onvoiceschanged = () => {
+            log("Voices loaded");
+        };
+
+    </script>
+</body>
+
+</html>

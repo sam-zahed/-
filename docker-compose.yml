@@ -1,0 +1,91 @@
+services:
+  # ==================== Database ====================
+  postgres:
+    image: postgres:15-alpine
+    container_name: blind_assist_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: fastapi_agent
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==================== Storage ====================
+  minio:
+    image: minio/minio:latest
+    container_name: blind_assist_storage
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000" # API
+      - "9001:9001" # Console
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+  # ==================== AI Engines ====================
+  ollama:
+    image: ollama/ollama:latest
+    container_name: blind_assist_llm
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    environment:
+      - OLLAMA_MAX_LOADED_MODELS=1
+      - OLLAMA_KEEP_ALIVE=2m
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "ollama", "list" ]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+
+  # ==================== FastAPI Backend ====================
+  fastapi:
+    build:
+      context: .
+      dockerfile: app/Dockerfile
+    container_name: blind_assist_api
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./app:/code/app
+      - ./client:/code/client
+      - ./models:/code/models
+      - app_data:/code/app/data
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/fastapi_agent
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - PYTHONUNBUFFERED=1
+      - OLLAMA_HOST=http://ollama:11434
+      # Suppress NNPACK warnings on unsupported hardware
+      - NNPACK_MAX_THREADS=0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  miniodata:
+  ollama_data:
+
+  app_data:
