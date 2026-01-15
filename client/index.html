@@ -4,10 +4,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>مساعدك الذكي - Smart Assistant</title>
+    <title>مساعدك الذكي - Smart Assistant - Smart Blind Assistant</title>
 
     <!-- Accessibility Meta -->
-    <meta name="description" content="مساعد ذكي للمكفوفين - يتكلم معك ويفهم أوامرك">
+    <meta name="description" content="Smart assistant for blind people - مساعد ذكي للمكفوفين - Smartassistent for blinde">
 
     <style>
         :root {
@@ -293,43 +293,43 @@
 </head>
 
 <body>
-    <!-- شاشة اختيار اللغة -->
-    <div id="lang-screen" role="dialog" aria-label="اختر اللغة">
+    <!-- Language selection screen -->
+    <div id="lang-screen" role="dialog" aria-label="Choose language">
         <h1>اختر اللغة<br>Select Language<br>Vælg Sprog</h1>
         <button class="lang-option" onclick="selectLang('ar')">🇸🇦 العربية</button>
         <button class="lang-option" onclick="selectLang('en')">🇬🇧 English</button>
         <button class="lang-option" onclick="selectLang('da')">🇩🇰 Dansk</button>
     </div>
 
-    <!-- مؤشر وضع الصمت -->
+    <!-- Quiet mode indicator -->
     <div id="quiet-indicator" role="status" aria-live="polite">
-        🔇 وضع الصمت - فقط الأخطار
+        🔇 Stilletilstand - kun advarsler
     </div>
 
-    <!-- الزر الرئيسي -->
-    <div id="main-button" role="button" tabindex="0" aria-label="اضغط للتحدث مع المساعد" onclick="handleMainTap()">
+    <!-- Main button -->
+    <div id="main-button" role="button" tabindex="0" aria-label="Tryk for at tale med assistenten" onclick="handleMainTap()">
 
         <div id="mic-icon" aria-hidden="true">🎤</div>
-        <div id="status-text">اضغط هنا للتحدث</div>
-        <div id="instruction-text">سأساعدك في معرفة ما حولك</div>
+        <div id="status-text">Tryk her for at tale</div>
+        <div id="instruction-text">Jeg hjælper dig med at se hvad omkring dig</div>
     </div>
 
-    <!-- لوحة النتائج -->
-    <div id="results-panel" role="region" aria-label="نتائج الكشف" aria-live="polite"></div>
+    <!-- Results panel -->
+    <div id="results-panel" role="region" aria-label="Detection results" aria-live="polite"></div>
 
-    <!-- أزرار سريعة -->
-    <div id="quick-commands" role="toolbar" aria-label="أوامر سريعة">
-        <button class="quick-btn primary" onclick="quickCommand('describe')" aria-label="وصف المشهد">
-            👁️ ماذا أمامي
+    <!-- Quick command buttons -->
+    <div id="quick-commands" role="toolbar" aria-label="Quick commands">
+        <button class="quick-btn primary" onclick="quickCommand('describe')" aria-label="Beskriv scenen">
+            👁️ Hvad ser du
         </button>
-        <button class="quick-btn success" onclick="quickCommand('read')" aria-label="قراءة النص">
-            📖 اقرأ
+        <button class="quick-btn success" onclick="quickCommand('read')" aria-label="Læs teksten">
+            📖 Læs
         </button>
-        <button class="quick-btn warning" onclick="quickCommand('quiet')" aria-label="وضع الصمت">
-            🔇 اسكت
+        <button class="quick-btn warning" onclick="quickCommand('quiet')" aria-label="Stilletilstand">
+            🔇 Vær stille
         </button>
-        <button class="quick-btn danger" onclick="quickCommand('scan')" aria-label="مسح كامل">
-            🔄 مسح كامل
+        <button class="quick-btn danger" onclick="quickCommand('scan')" aria-label="Fuld scanning">
+            🔄 Scan omkring
         </button>
     </div>
 

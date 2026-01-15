@@ -27,8 +27,8 @@ except ImportError:
     print("⚠️ FaceRecognizer module could not be imported.")
     FACE_REC_AVAILABLE = False
 
-# Minimum confidence - Increased to reduce hallucinations
-MIN_CONFIDENCE = 0.25 
+# Minimum confidence - PHASE 1: Increased to 0.35 for better accuracy
+MIN_CONFIDENCE = 0.35  # تم رفعه من 0.25 إلى 0.35 للدقة العالية
 
 # Specific thresholds to prevent 'car in bedroom'
 CLASS_THRESHOLDS = {
@@ -37,6 +37,19 @@ CLASS_THRESHOLDS = {
     'bus': 0.40,
     'motorcycle': 0.35,
     'train': 0.40
+}
+
+# PHASE 1: Image preprocessing optimization
+TARGET_IMAGE_SIZE = (320, 240)  # تصغير الصور للسرعة (640×480 → 320×240)
+MAX_IMAGE_SIZE = 640  # الحد الأقصى قبل التصغير
+
+# PHASE 1: Context-based filtering - منع الأخطاء الواضحة
+CONTEXT_FILTERS = {
+    'car': ['bedroom', 'bathroom', 'kitchen'],
+    'tree': ['bedroom', 'bathroom', 'kitchen', 'office'],
+    'bus': ['bedroom', 'bathroom', 'kitchen', 'office'],
+    'toilet': ['street', 'park'],
+    'refrigerator': ['street', 'park', 'outdoor'],
 }
 
 # Custom Vocabulary for Blind Assistance - Expanded
@@ -93,6 +106,76 @@ ARABIC_NAMES = {
     'lamp': 'مصباح', 'light': 'إضاءة', 'ceiling fan': 'مروحة سقف'
 }
 
+# PHASE 1: Helper functions for filtering
+def infer_room_context(detections):
+    """استنتج الغرفة من الكائنات المكتشفة"""
+    room_scores = {}
+    
+    for det in detections:
+        obj_class = det['class'].lower()
+        
+        # تعيين الكائنات للغرف
+        if obj_class in ['bed', 'pillow', 'blanket']:
+            room_scores['bedroom'] = room_scores.get('bedroom', 0) + det['conf']
+        elif obj_class in ['toilet', 'sink', 'bathtub', 'shower']:
+            room_scores['bathroom'] = room_scores.get('bathroom', 0) + det['conf']
+        elif obj_class in ['refrigerator', 'stove', 'oven', 'kitchen table']:
+            room_scores['kitchen'] = room_scores.get('kitchen', 0) + det['conf']
+        elif obj_class in ['tv', 'sofa', 'couch', 'armchair']:
+            room_scores['living_room'] = room_scores.get('living_room', 0) + det['conf']
+        elif obj_class in ['desk', 'computer', 'laptop', 'bookcase']:
+            room_scores['office'] = room_scores.get('office', 0) + det['conf']
+        elif obj_class in ['car', 'tree', 'grass', 'sky']:
+            room_scores['outdoor'] = room_scores.get('outdoor', 0) + det['conf']
+    
+    if not room_scores:
+        return None
+    
+    return max(room_scores, key=room_scores.get)
+
+def filter_impossible_detections(detections):
+    """
+    PHASE 1: تصفية الأخطاء الواضحة (مثل سيارة في غرفة النوم)
+    """
+    if not detections:
+        return detections
+    
+    # استنتج الغرفة من السياق
+    room = infer_room_context(detections)
+    
+    filtered = []
+    for det in detections:
+        obj_class = det['class'].lower()
+        
+        # تحقق من السياق
+        if room and obj_class in CONTEXT_FILTERS:
+            forbidden_rooms = CONTEXT_FILTERS[obj_class]
+            if room in forbidden_rooms:
+                continue  # تجاهل هذا الكائن - خطأ واضح
+        
+        filtered.append(det)
+    
+    return filtered
+
+def resize_image_for_inference(image):
+    """
+    PHASE 1: تصغير الصور للسرعة مع الحفاظ على الجودة
+    """
+    h, w = image.shape[:2]
+    
+    if w <= TARGET_IMAGE_SIZE[0]:
+        return image
+    
+    # احسب النسبة
+    scale = TARGET_IMAGE_SIZE[0] / w
+    new_h = int(h * scale)
+    new_w = TARGET_IMAGE_SIZE[0]
+    
+    # استخدم INTER_LINEAR للجودة الأفضل
+    resized = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+    
+    return resized
+
 class DummyDetector:
     def detect(self, image_bytes, target_lang='ar'): return []
 
@@ -143,12 +226,8 @@ try:
                     img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
                     if img is None: return []
 
-                    # Resize for performance optimization
-                    # Max 640px width
-                    h, w = img.shape[:2]
-                    if w > 640:
-                        scale = 640 / w
-                        img = cv2.resize(img, (640, int(h * scale)))
+                    # PHASE 1: تصغير الصور للسرعة
+                    img = resize_image_for_inference(img)
                     
                     # 1. Estimate depth map if available
                     depth_map = None
@@ -234,6 +313,9 @@ try:
                                 })
                             except Exception as inner_e:
                                 continue
+                    
+                    # PHASE 1: تصفية الأخطاء الواضحة
+                    detections = filter_impossible_detections(detections)
                     
                     detections.sort(key=lambda x: x['distance_m'])
                     return detections[:5]

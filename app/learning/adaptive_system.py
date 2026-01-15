@@ -70,6 +70,9 @@ class AdaptiveLearning:
         self.learning_rate = 0.1  # معدل التعلم
         self.min_samples_to_learn = 3  # أقل عدد عينات للبدء بالتعلم
         
+        # PHASE 3: Personalization settings
+        self.model_path = self.data_dir / f'{self.user_id}_model.pkl'
+        
     def _load_profile(self) -> UserProfile:
         """تحميل ملف تعريف المستخدم"""
         profile_path = self.data_dir / f'{self.user_id}_profile.json'
@@ -310,7 +313,124 @@ class AdaptiveLearning:
             'interactions_count': len(self.session_interactions),
             'interactions': self.session_interactions
         }
-
-
+    
+    # ============ PHASE 3: تحسينات التخصيص ============
+    
+    def record_interaction(self, object_class: str, action: str, duration: float = None) -> None:
+        """
+        سجل تفاعل المستخدم مع كائن معين
+        
+        action: 'attended' = انتبه له، 'ignored' = تجاهل، 'asked' = طلب معلومات
+        """
+        interaction = {
+            'object': object_class,
+            'action': action,
+            'timestamp': datetime.now().isoformat(),
+            'duration': duration
+        }
+        
+        self.session_interactions.append(interaction)
+        
+        # تحديث التفضيلات
+        if object_class not in self.profile.preferences:
+            self.profile.preferences[object_class] = UserPreference(
+                object_class=object_class,
+                priority_adjustment=0.0
+            )
+        
+        pref = self.profile.preferences[object_class]
+        
+        # تحديث الإحصائيات
+        if action == 'ignored':
+            pref.ignore_count += 1
+            # قلل الأولوية للكائنات المتجاهلة
+            pref.priority_adjustment -= self.learning_rate
+            pref.priority_adjustment = max(pref.priority_adjustment, -1.0)
+        
+        elif action == 'attended':
+            pref.action_count += 1
+            # زد الأولوية للكائنات المهمة
+            pref.priority_adjustment += self.learning_rate * 0.5
+            pref.priority_adjustment = min(pref.priority_adjustment, 1.0)
+        
+        elif action == 'asked':
+            pref.action_count += 2
+            pref.priority_adjustment += self.learning_rate
+            pref.priority_adjustment = min(pref.priority_adjustment, 1.0)
+        
+        pref.last_updated = datetime.now()
+        
+        # احفظ التحديث
+        self._save_profile()
+    
+    def should_alert_about(self, object_class: str) -> bool:
+        """
+        تحديد ما إذا كان يجب تنبيه المستخدم حول هذا الكائن
+        بناءً على السلوك السابق
+        """
+        if object_class not in self.profile.preferences:
+            return True  # أول مرة = نبه
+        
+        pref = self.profile.preferences[object_class]
+        
+        # إذا تم تجاهله 5 مرات أو أكثر
+        if pref.ignore_count >= 5:
+            return False
+        
+        # إذا كان التعديل سالب جداً
+        if pref.priority_adjustment < -0.7:
+            return False
+        
+        return True
+    
+    def get_personalized_priority_adjustment(self, object_class: str) -> float:
+        """احصل على تعديل الأولوية الشخصي"""
+        if object_class not in self.profile.preferences:
+            return 0.0
+        
+        return self.profile.preferences[object_class].priority_adjustment
+    
+    def detect_preferred_routes(self) -> Dict:
+        """
+        PHASE 3: كشف الطرق المفضلة من سجل السلوك
+        """
+        routes = {}
+        
+        for interaction in self.session_interactions:
+            if 'route_context' in interaction:
+                route = interaction['route_context']
+                if route not in routes:
+                    routes[route] = {
+                        'frequency': 0,
+                        'last_used': None,
+                        'landmarks': []
+                    }
+                
+                routes[route]['frequency'] += 1
+                routes[route]['last_used'] = interaction['timestamp']
+        
+        return routes
+    
+    def get_learning_statistics(self) -> Dict:
+        """احصل على إحصائيات التعلم"""
+        total_interactions = len(self.session_interactions)
+        ignored_count = sum(1 for i in self.session_interactions if i['action'] == 'ignored')
+        attended_count = sum(1 for i in self.session_interactions if i['action'] == 'attended')
+        
+        return {
+            'total_interactions': total_interactions,
+            'ignored_count': ignored_count,
+            'attended_count': attended_count,
+            'ignore_rate': ignored_count / total_interactions if total_interactions > 0 else 0,
+            'learned_objects': len(self.profile.preferences),
+            'high_priority_objects': len([
+                p for p in self.profile.preferences.values()
+                if p.priority_adjustment > 0.5
+            ]),
+            'low_priority_objects': len([
+                p for p in self.profile.preferences.values()
+                if p.priority_adjustment < -0.5
+            ])
+        }
 # Instance عام
 adaptive_learning = AdaptiveLearning()

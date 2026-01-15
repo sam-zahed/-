@@ -15,6 +15,8 @@ from typing import Optional, List, Dict
 import base64
 import io
 import urllib.parse
+import asyncio
+import time
 
 from .brain import assistant_brain, CommandType
 from .context_manager import context_manager
@@ -26,10 +28,25 @@ from app.audio.transcribe import transcribe_audio_bytes
 from app.audio.tts import synthesize_text
 from app.spatial_awareness.stationary_detector import stationary_detector
 from app.vision.ocr_reader import ocr_reader
+
+# PHASE 2: Import caching
+from app.utils.caching import cache_manager, perf_monitor, timed
+
+# PHASE 3: Import adaptive learning
+from app.learning.adaptive_system import AdaptiveLearning
+
+# PHASE 4: Import advanced features
+from app.utils.advanced_features import (
+    ambient_sound_detector, dynamic_alert_system, location_awareness
+)
+
 import numpy as np
 import cv2
 
 router = APIRouter()
+
+# PHASE 3: Initialize adaptive learning
+learning_system = AdaptiveLearning(user_id="default")
 
 
 # ======== Models ========

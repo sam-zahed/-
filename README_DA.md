@@ -1,4 +1,4 @@
-# 🎯 Smart Blind Assistant (Intelligent Blind Assistant)
+# 🎯 Smart Blind Assistant (Smart Blind Assistant)
 
 ![Status](https://img.shields.io/badge/Status-Active-success)
 ![Docker](https://img.shields.io/badge/Docker-Supported-blue)
